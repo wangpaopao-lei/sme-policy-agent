@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>中小企业政策问答助手</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-icon">🏛️</div>
+    <div>
+      <h1>中小企业政策问答助手</h1>
+      <p>基于国家中小企业政策信息平台官方文件</p>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="messages">
+      <div class="welcome" id="welcome">
+        <div class="icon">📋</div>
+        <h2>您好，请问有什么可以帮您？</h2>
+        <p>我可以帮您查询中小企业相关政策，包括<br/>贷款贴息、设备更新、产业扶持等内容</p>
+        <div class="examples">
+          <button class="example-btn" onclick="sendExample(this)">中小企业贷款贴息政策有哪些？</button>
+          <button class="example-btn" onclick="sendExample(this)">设备更新有哪些支持政策？</button>
+          <button class="example-btn" onclick="sendExample(this)">优质中小企业梯度培育条件是什么？</button>
+          <button class="example-btn" onclick="sendExample(this)">工业互联网相关扶持政策</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <textarea
+        id="input"
+        rows="1"
+        placeholder="请输入您的政策咨询问题，按 Enter 发送..."
+      ></textarea>
+      <button id="send-btn" onclick="sendMessage()" title="发送">&#9658;</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="/static/js/chat.js"></script>
+</body>
+</html>

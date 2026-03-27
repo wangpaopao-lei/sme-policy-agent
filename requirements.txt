@@ -1,0 +1,8 @@
+anthropic
+flask
+chromadb
+pdfplumber
+beautifulsoup4
+lxml
+sentence-transformers
+python-dotenv
