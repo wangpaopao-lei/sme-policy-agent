@@ -23,29 +23,92 @@ def load_eval_set(path: str = "evaluation/dataset/eval_set.json") -> list[dict]:
         return json.load(f)
 
 
-def run_retrieval_only(eval_set: list[dict], agent) -> dict:
+def _init_v2_searcher():
+    """初始化 v2 混合检索器"""
+    import config
+    from src.retrieval.embedder import Embedder
+    from src.retrieval.vector_store import VectorStore
+    from src.retrieval.bm25_store import BM25Store
+    from src.retrieval.hybrid_searcher import HybridSearcher
+
+    print("加载 Embedding 模型...")
+    embedder = Embedder(model_name=config.EMBEDDING_MODEL)
+
+    print("加载向量索引...")
+    vector_store = VectorStore(
+        chroma_path=config.CHROMA_PATH,
+        collection_name=config.CHROMA_COLLECTION + "_v2",
+    )
+    print(f"  向量索引: {vector_store.count()} 条")
+
+    print("加载 BM25 索引...")
+    bm25_store = BM25Store()
+    bm25_path = os.path.join(config.CHROMA_PATH, "bm25_index.pkl")
+    if os.path.exists(bm25_path):
+        bm25_store.load(bm25_path)
+        print(f"  BM25 索引: {bm25_store.count()} 条")
+    else:
+        print("  [WARN] BM25 索引文件不存在，仅使用向量检索")
+
+    searcher = HybridSearcher(
+        vector_store=vector_store,
+        bm25_store=bm25_store,
+        embedder=embedder,
+    )
+    return searcher
+
+
+def _init_v1_searcher():
+    """初始化 v1 纯向量检索（fallback）"""
+    import config
+    from src.retrieval.embedder import Embedder
+    from src.retrieval.store import PolicyStore
+
+    embedder = Embedder(model_name=config.EMBEDDING_MODEL)
+    store = PolicyStore(
+        chroma_path=config.CHROMA_PATH,
+        collection_name=config.CHROMA_COLLECTION,
+    )
+    return embedder, store
+
+
+def run_retrieval_only(eval_set: list[dict], agent, use_v2: bool = True) -> dict:
     """只运行检索评估（不调 LLM 生成回答）"""
-    eval_results = []
 
-    for item in eval_set:
-        # 通过 agent 的检索工具获取检索结果
-        # 简化版：直接调用底层检索
+    if use_v2:
         try:
-            from src.retrieval.embedder import Embedder
-            from src.retrieval.store import PolicyStore
-            import config
-
-            embedder = Embedder(model_name=config.EMBEDDING_MODEL)
-            store = PolicyStore(
-                chroma_path=config.CHROMA_PATH,
-                collection_name=config.CHROMA_COLLECTION,
-            )
-
-            embedding = embedder.embed(item["question"])
-            results = store.query(embedding, top_k=5)
-            retrieved_sources = [r["source"] for r in results]
+            searcher = _init_v2_searcher()
         except Exception as e:
-            print(f"  [ERROR] 检索失败: {e}")
+            print(f"[WARN] v2 初始化失败 ({e})，退回 v1")
+            use_v2 = False
+
+    if not use_v2:
+        embedder, store = _init_v1_searcher()
+
+    eval_results = []
+    for i, item in enumerate(eval_set):
+        if (i + 1) % 20 == 0:
+            print(f"  检索进度: {i+1}/{len(eval_set)}")
+
+        try:
+            if use_v2:
+                results = searcher.search(
+                    query=item["question"],
+                    top_k=5,
+                    expand_parents=False,
+                )
+                retrieved_sources = []
+                for r in results:
+                    meta = r.get("metadata", {})
+                    src = meta.get("source", r.get("source", ""))
+                    if src and src not in retrieved_sources:
+                        retrieved_sources.append(src)
+            else:
+                embedding = embedder.embed(item["question"])
+                results = store.query(embedding, top_k=5)
+                retrieved_sources = [r["source"] for r in results]
+        except Exception as e:
+            print(f"  [ERROR] {item['question'][:30]}... 检索失败: {e}")
             retrieved_sources = []
 
         eval_results.append({
@@ -166,11 +229,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RAG 系统评估")
     parser.add_argument("--full", action="store_true", help="完整评估")
     parser.add_argument("--judge", action="store_true", help="包含 LLM-as-Judge")
+    parser.add_argument("--v1", action="store_true", help="使用 v1 纯向量检索（默认 v2 混合检索）")
     parser.add_argument("--output", type=str, default=None, help="报告输出路径")
     args = parser.parse_args()
 
     eval_set = load_eval_set()
-    print(f"加载评估数据集: {len(eval_set)} 条\n")
+    use_v2 = not args.v1
+    print(f"加载评估数据集: {len(eval_set)} 条")
+    print(f"检索模式: {'v2 混合检索' if use_v2 else 'v1 纯向量检索'}\n")
 
     if args.full or args.judge:
         # 需要初始化 Agent
@@ -180,13 +246,13 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"无法初始化 Agent: {e}")
             print("退回到纯检索评估模式")
-            report = {"retrieval": run_retrieval_only(eval_set, None)}
+            report = {"retrieval": run_retrieval_only(eval_set, None, use_v2=use_v2)}
             print_report(report)
             sys.exit(1)
 
         report = run_full_evaluation(eval_set, agent)
     else:
-        report = {"retrieval": run_retrieval_only(eval_set, None)}
+        report = {"retrieval": run_retrieval_only(eval_set, None, use_v2=use_v2)}
 
     print_report(report)
 
