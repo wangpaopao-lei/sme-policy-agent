@@ -69,15 +69,22 @@ def ingest(
 
     print(f"\n  合计: {len(all_parents)} 父 + {len(all_children)} 子 chunks")
 
-    # === 步骤 3：子 chunk Embedding ===
+    # === 步骤 3：Embedding ===
     print(f"\n{'=' * 60}")
-    print("步骤 3/5：生成子 chunk Embedding")
+    print("步骤 3/5：生成 Embedding")
     print("=" * 60)
 
     embedder = Embedder(model_name=config.EMBEDDING_MODEL)
+
+    # 子 chunk embedding
     child_texts = [c["text"] for c in all_children]
     child_embeddings = embedder.embed_batch(child_texts)
-    print(f"  生成 {len(child_embeddings)} 条向量")
+    print(f"  子 chunks: {len(child_embeddings)} 条向量")
+
+    # 父 chunk 也需要 embedding（ChromaDB 要求同一 collection 维度一致）
+    parent_texts = [c["text"] for c in all_parents]
+    parent_embeddings = embedder.embed_batch(parent_texts)
+    print(f"  父 chunks: {len(parent_embeddings)} 条向量")
 
     # === 步骤 4：写入 ChromaDB ===
     print(f"\n{'=' * 60}")
@@ -93,13 +100,13 @@ def ingest(
         print("  清空现有数据...")
         vector_store.clear()
 
-    # 写入父 chunk（不需要 embedding，只用于展开阅读）
-    vector_store.add_chunks_without_embeddings(all_parents)
-    print(f"  父 chunks: {len(all_parents)} 条")
-
-    # 写入子 chunk + embedding
+    # 先写子 chunk（确定 collection 维度为 1024）
     vector_store.add_chunks(all_children, child_embeddings)
     print(f"  子 chunks: {len(all_children)} 条")
+
+    # 再写父 chunk（同维度 embedding）
+    vector_store.add_chunks(all_parents, parent_embeddings)
+    print(f"  父 chunks: {len(all_parents)} 条")
     print(f"  数据库总计: {vector_store.count()} 条")
 
     # === 步骤 5：构建 BM25 索引 ===

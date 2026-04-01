@@ -63,9 +63,12 @@ class TestIngestV2:
 
         mock_pipeline.assert_called_once()
         mock_chunk.assert_called_once()
-        mock_embedder.embed_batch.assert_called_once_with(["子chunk"])
-        mock_vs.add_chunks_without_embeddings.assert_called_once()
-        mock_vs.add_chunks.assert_called_once()
+        # embed_batch 调用两次：子 chunk + 父 chunk
+        assert mock_embedder.embed_batch.call_count == 2
+        mock_embedder.embed_batch.assert_any_call(["子chunk"])
+        mock_embedder.embed_batch.assert_any_call(["父chunk"])
+        # add_chunks 调用两次：子 chunk + 父 chunk
+        assert mock_vs.add_chunks.call_count == 2
         mock_bm25.build_index.assert_called_once()
         mock_bm25.save.assert_called_once()
 
