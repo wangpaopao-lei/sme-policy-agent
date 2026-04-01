@@ -16,18 +16,24 @@ from evaluation.answer_eval import judge_answer
 
 class TestNormalizeSource:
     def test_chinese_double_quotes(self):
-        assert _normalize_source('\u201c测试\u201d.pdf') == '"测试".pdf'
+        assert _normalize_source('\u201c测试\u201d.pdf') == '"测试"'
 
     def test_chinese_single_quotes(self):
-        assert _normalize_source('\u2018测试\u2019.pdf') == "'测试'.pdf"
+        assert _normalize_source('\u2018测试\u2019.pdf') == "'测试'"
 
     def test_fullwidth_space(self):
-        assert _normalize_source('测试\u3000文件.pdf') == '测试 文件.pdf'
+        assert _normalize_source('测试\u3000文件.pdf') == '测试 文件'
 
     def test_source_match_different_quotes(self):
         """全角引号和 ASCII 引号应匹配"""
         assert _source_match('\u201c人工智能\u201d.pdf', '"人工智能".pdf')
         assert _source_match('"人工智能".pdf', '\u201c人工智能\u201d.pdf')
+
+    def test_source_match_different_extensions(self):
+        """不同扩展名的同名文件应匹配"""
+        assert _source_match('政策文件.txt', '政策文件.md')
+        assert _source_match('政策文件.pdf', '政策文件.md')
+        assert _source_match('政策文件.txt', '政策文件.pdf')
 
     def test_source_match_identical(self):
         assert _source_match('test.pdf', 'test.pdf')
@@ -68,6 +74,13 @@ class TestRecallAtK:
         assert recall_at_k(
             ['\u201c人工智能\u201d.pdf'],
             ['"人工智能".pdf'],
+        ) == 1.0
+
+    def test_extension_normalization(self):
+        """不同扩展名应被视为匹配"""
+        assert recall_at_k(
+            ['政策.md'],
+            ['政策.txt'],
         ) == 1.0
 
 

@@ -8,9 +8,13 @@ import json
 
 
 def _normalize_source(s: str) -> str:
-    """归一化文件名中的引号和空格，避免全角/半角差异导致的匹配失败"""
+    """归一化文件名：引号、空格、扩展名，避免格式差异导致匹配失败"""
+    import os
+    # 去掉扩展名（同一文档的 .txt/.md/.pdf 应视为匹配）
+    stem = os.path.splitext(s)[0]
     return (
-        s.replace("\u201c", '"').replace("\u201d", '"')   # 中文双引号 "" → "
+        stem
+        .replace("\u201c", '"').replace("\u201d", '"')   # 中文双引号 "" → "
         .replace("\u2018", "'").replace("\u2019", "'")    # 中文单引号 '' → '
         .replace("\u300c", '"').replace("\u300d", '"')    # 日文引号 「」 → "
         .replace("\u3000", " ")                           # 全角空格
