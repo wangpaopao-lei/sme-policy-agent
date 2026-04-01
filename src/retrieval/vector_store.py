@@ -15,6 +15,24 @@ class VectorStore:
             metadata={"hnsw:space": "cosine"},
         )
 
+    @staticmethod
+    def _dedup_indices(ids: list[str]) -> list[int]:
+        """返回去重后每个 ID 第一次出现的索引列表"""
+        seen = set()
+        result = []
+        for i, id_ in enumerate(ids):
+            if id_ not in seen:
+                seen.add(id_)
+                result.append(i)
+        return result
+
+    def _get_existing_ids(self, ids: list[str]) -> set[str]:
+        """查询已存在的 ID（先去重，避免 ChromaDB DuplicateIDError）"""
+        unique_ids = list(set(ids))
+        if not unique_ids:
+            return set()
+        return set(self.collection.get(ids=unique_ids)["ids"])
+
     def add_chunks(self, chunks: list[dict], embeddings: list[list[float]]) -> None:
         """
         写入 chunks 和向量。支持任意 metadata（含 role, parent_id 等）。
@@ -35,9 +53,10 @@ class VectorStore:
                     meta[k] = v
             metadatas.append(meta)
 
-        # 跳过已存在的 ID
-        existing = set(self.collection.get(ids=ids)["ids"])
-        new_indices = [i for i, id_ in enumerate(ids) if id_ not in existing]
+        # 输入去重 + 跳过已存在的 ID
+        dedup = self._dedup_indices(ids)
+        existing = self._get_existing_ids(ids)
+        new_indices = [i for i in dedup if ids[i] not in existing]
 
         if not new_indices:
             return
@@ -62,8 +81,9 @@ class VectorStore:
                     meta[k] = v
             metadatas.append(meta)
 
-        existing = set(self.collection.get(ids=ids)["ids"])
-        new_indices = [i for i, id_ in enumerate(ids) if id_ not in existing]
+        dedup = self._dedup_indices(ids)
+        existing = self._get_existing_ids(ids)
+        new_indices = [i for i in dedup if ids[i] not in existing]
 
         if not new_indices:
             return
