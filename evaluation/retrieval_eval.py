@@ -7,6 +7,22 @@
 import json
 
 
+def _normalize_source(s: str) -> str:
+    """归一化文件名中的引号和空格，避免全角/半角差异导致的匹配失败"""
+    return (
+        s.replace("\u201c", '"').replace("\u201d", '"')   # 中文双引号 "" → "
+        .replace("\u2018", "'").replace("\u2019", "'")    # 中文单引号 '' → '
+        .replace("\u300c", '"').replace("\u300d", '"')    # 日文引号 「」 → "
+        .replace("\u3000", " ")                           # 全角空格
+        .strip()
+    )
+
+
+def _source_match(retrieved: str, expected: str) -> bool:
+    """比较两个 source 是否匹配（归一化后比较）"""
+    return _normalize_source(retrieved) == _normalize_source(expected)
+
+
 def recall_at_k(retrieved_sources: list[str], expected_sources: list[str], k: int = 5) -> float:
     """
     计算单个问题的 Recall@K。
@@ -16,9 +32,10 @@ def recall_at_k(retrieved_sources: list[str], expected_sources: list[str], k: in
         return 1.0  # 无答案类问题，不需要检索
 
     top_k = retrieved_sources[:k]
-    for src in expected_sources:
-        if src in top_k:
-            return 1.0
+    for expected in expected_sources:
+        for retrieved in top_k:
+            if _source_match(retrieved, expected):
+                return 1.0
     return 0.0
 
 
@@ -30,9 +47,10 @@ def mrr(retrieved_sources: list[str], expected_sources: list[str]) -> float:
     if not expected_sources:
         return 1.0
 
-    for rank, src in enumerate(retrieved_sources, 1):
-        if src in expected_sources:
-            return 1.0 / rank
+    for rank, retrieved in enumerate(retrieved_sources, 1):
+        for expected in expected_sources:
+            if _source_match(retrieved, expected):
+                return 1.0 / rank
     return 0.0
 
 

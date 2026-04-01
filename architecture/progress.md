@@ -44,10 +44,10 @@
 - [x] 1.7 架构文档更新
 
 ### Phase 2：分块 + 检索升级
-- [ ] 2.1 语义分块（Markdown 标题层级 + 父子 chunk）
-- [ ] 2.2 BM25 索引（jieba + 自定义词典）
-- [ ] 2.3 混合检索（向量+BM25+RRF+元数据过滤）
-- [ ] 2.4 Reranker（BGE-Reranker-v2-m3）
+- [x] 2.1 语义分块（Markdown 标题层级 + 父子 chunk，26个测试）
+- [x] 2.2 BM25 索引（jieba + 自定义政策词典，16个测试）
+- [x] 2.3 混合检索（向量+BM25+RRF+元数据过滤，12个测试）
+- [x] 2.4 Reranker（BGE-Reranker-v2-m3，6个测试）
 - [ ] 2.5 评估验证（对比 Phase 1 基准线）
 
 ### Phase 3：对话体验升级
