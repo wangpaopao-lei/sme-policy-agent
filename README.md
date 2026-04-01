@@ -1,6 +1,6 @@
 <div align="center">
 
-# :classical_building: 中小企业政策问答 Agent
+# 中小企业政策问答 Agent
 
 **基于 RAG + Claude API 的中小企业政策智能问答系统**
 
@@ -16,22 +16,22 @@
 
 面向国家中小企业政策信息平台的问答 Agent。用户通过 Web 界面提问，系统自动检索政策文档库，由 Claude 大语言模型综合分析后给出有来源依据的结构化回答。
 
-## :sparkles: 核心特性
+## 核心特性
 
 | 特性 | 说明 |
 |------|------|
-| :mag: **混合检索** | 向量语义检索（BGE-M3）+ BM25 关键词检索（jieba + 政策词典），RRF 融合 |
-| :jigsaw: **父子 chunk** | 子 chunk（~300字）检索命中，父 chunk（~1000字）送给 Claude 阅读 |
-| :robot: **Agent 模式** | Claude 自主决定检索策略、过滤条件、是否追加检索，最多 5 轮 tool_use |
-| :zap: **SSE 流式输出** | tool_use 阶段静默执行，最终回答逐字流式输出 |
-| :speech_balloon: **多轮对话** | 滑动窗口 10 轮历史 + Haiku Query 改写（指代消解、省略补全） |
-| :floppy_disk: **语义缓存** | Embedding 相似度匹配，LRU + TTL + source 关联失效，SQLite 持久化 |
-| :page_facing_up: **文档处理** | PDF/HTML/Markdown 解析 → 标准化 Markdown + 元数据增强 + 表格 Q&K |
-| :bar_chart: **评估体系** | 105 条评估集 x 8 种类型，参数调优框架，Recall@7 = 0.97 |
+| **混合检索** | 向量语义检索（BGE-M3）+ BM25 关键词检索（jieba + 政策词典），RRF 融合 |
+| **父子 chunk** | 子 chunk（~300字）检索命中，父 chunk（~1000字）送给 Claude 阅读 |
+| **Agent 模式** | Claude 自主决定检索策略、过滤条件、是否追加检索，最多 5 轮 tool_use |
+| **SSE 流式输出** | tool_use 阶段静默执行，最终回答逐字流式输出 |
+| **多轮对话** | 滑动窗口 10 轮历史 + Haiku Query 改写（指代消解、省略补全） |
+| **语义缓存** | Embedding 相似度匹配，LRU + TTL + source 关联失效，SQLite 持久化 |
+| **文档处理** | PDF/HTML/Markdown 解析 → 标准化 Markdown + 元数据增强 + 表格 Q&K |
+| **评估体系** | 105 条评估集 x 8 种类型，参数调优框架，Recall@7 = 0.97 |
 
 ---
 
-## :building_construction: 系统架构
+## 系统架构
 
 ### 在线服务
 
@@ -107,7 +107,7 @@ graph LR
 
 ---
 
-## :hammer_and_wrench: 技术栈
+## 技术栈
 
 | 组件 | 选型 | 说明 |
 |------|------|------|
@@ -123,7 +123,7 @@ graph LR
 
 ---
 
-## :rocket: 快速开始
+## 快速开始
 
 ### 1. 环境准备
 
@@ -162,7 +162,7 @@ python src/web/app.py
 
 ---
 
-## :bar_chart: 评估结果
+## 评估结果
 
 ### 运行评估
 
@@ -224,12 +224,12 @@ python evaluation/tuning.py --param use_rerank --values true,false
 | 参数 | 测试范围 | 最优值 | 结论 |
 |------|---------|:------:|------|
 | `rrf_k` | 20 - 100 | 60 | 无差异，当前数据规模下两路排名高度一致 |
-| `top_k` | 3 - 10 | **7** | 线性提升：3 :arrow_right: 0.94, 5 :arrow_right: 0.96, 7 :arrow_right: 0.97, 10 :arrow_right: 0.98 |
+| `top_k` | 3 - 10 | **7** | 线性提升：3→0.94, 5→0.96, 7→0.97, 10→0.98 |
 | `rerank` | on / off | off | +1% Recall 但 11x 慢（64s vs 5.7s），性价比低 |
 
 ---
 
-## :test_tube: 测试
+## 测试
 
 ```bash
 # 全部单元测试（无需外部依赖）
@@ -243,7 +243,7 @@ pytest tests/ -m integration
 
 ---
 
-## :open_file_folder: 项目结构
+## 项目结构
 
 ```
 sme-policy-agent/
@@ -301,7 +301,7 @@ sme-policy-agent/
 
 ---
 
-## :scroll: 开发历程
+## 开发历程
 
 | 版本 | 内容 | 代码量 | 测试 |
 |:----:|------|:------:|:----:|
@@ -319,6 +319,6 @@ sme-policy-agent/
 
 ---
 
-## :page_with_curl: 许可证
+## 许可证
 
 本项目基于 [MIT License](./LICENSE) 开源。
