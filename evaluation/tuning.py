@@ -99,7 +99,7 @@ def run_param_sweep(
 
     返回: [{value, recall_at_k, mrr, time_sec}]
     """
-    base = base_params or {"rrf_k": 60, "top_k": 5, "use_rerank": True}
+    base = base_params or {"rrf_k": 60, "top_k": 7, "use_rerank": True}
 
     results = []
     for value in param_values:
@@ -209,6 +209,13 @@ if __name__ == "__main__":
     if os.path.exists(bm25_path):
         bm25.load(bm25_path)
 
+    # 加载 Reranker（use_rerank 实验需要）
+    reranker = None
+    if args.param == "use_rerank":
+        print("加载 Reranker 模型...")
+        from src.retrieval.reranker import Reranker
+        reranker = Reranker()
+
     eval_set = load_eval_set()
     print(f"评估集: {len(eval_set)} 条\n")
 
@@ -219,6 +226,7 @@ if __name__ == "__main__":
         embedder=embedder,
         store=store,
         bm25_store=bm25,
+        reranker=reranker,
     )
 
     print_comparison_table(args.param, results)

@@ -15,7 +15,7 @@ CHUNK_SIZE = 400
 CHUNK_OVERLAP = 50
 
 # Retrieval
-TOP_K = 5
+TOP_K = 7
 
 # ChromaDB
 CHROMA_PATH = "./chroma_db"
