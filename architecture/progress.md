@@ -51,11 +51,10 @@
 - [ ] 2.5 评估验证（对比 Phase 1 基准线）
 
 ### Phase 3：对话体验升级
-- [ ] 3.1 流式输出（Flask SSE + 前端 EventSource）
-- [ ] 3.2 多轮对话（滑动窗口 10轮 + Query 改写）
-- [ ] 3.3 语义缓存（LRU+TTL+source失效）
-- [ ] 3.4 Agent 策略优化（Tool 扩展 + Prompt 优化）
-- [ ] 3.5 评估验证
+- [x] 3.1 多轮对话（滑动窗口 10轮 + Claude Query 改写，15个测试）
+- [x] 3.2 语义缓存（LRU+TTL+source失效，SQLite持久化，9个测试）
+- [x] 3.3 流式输出（Flask SSE + agent.chat_stream + 前端 EventSource，4个测试）
+- [x] 3.4 Agent 策略优化（Tool filters 参数 + Prompt few-shot + 置信度引导）
 
 ### Phase 4：评估体系完善 + 整体调优
 - [ ] 4.1 RAGAS 完整指标 + LLM-as-Judge 补充
