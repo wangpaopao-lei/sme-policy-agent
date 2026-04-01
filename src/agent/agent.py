@@ -106,6 +106,80 @@ class PolicyAgent:
             "sources": _dedup(sources),
         }
 
+    def chat_stream(self, user_message: str, history: list[dict] = None):
+        """
+        流式版本的 chat。tool_use 阶段静默执行，最后一轮流式输出文本。
+
+        用法：
+            for event in agent.chat_stream("问题"):
+                if event["type"] == "text":
+                    print(event["text"], end="")
+                elif event["type"] == "done":
+                    print(event["sources"])
+
+        yield 事件：
+            {"type": "text", "text": str}    — 文本片段
+            {"type": "done", "sources": list} — 完成，附带来源
+            {"type": "error", "message": str} — 错误
+        """
+        messages = self._build_messages(history or [], user_message)
+        sources: list[str] = []
+
+        for round_idx in range(MAX_TOOL_ROUNDS):
+            # 前几轮 tool_use 阶段：非流式，静默执行
+            # 最后一轮或 end_turn 时：流式输出
+            response = self.client.messages.create(
+                model=config.CLAUDE_MODEL,
+                system=SYSTEM_PROMPT,
+                messages=messages,
+                tools=TOOL_SCHEMAS,
+                max_tokens=4096,
+            )
+
+            if response.stop_reason == "tool_use":
+                messages.append({"role": "assistant", "content": response.content})
+
+                tool_results = []
+                for block in response.content:
+                    if block.type == "tool_use":
+                        result = execute_tool(
+                            name=block.name,
+                            tool_input=block.input,
+                            embedder=self.embedder,
+                            store=self.store,
+                        )
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": result,
+                        })
+                        if block.name == "search_policy":
+                            sources.extend(_extract_sources(result))
+
+                messages.append({"role": "user", "content": tool_results})
+                continue
+
+            # end_turn 或其他：用流式 API 重新请求最终回答
+            # 将之前积累的 messages 用流式输出
+            try:
+                with self.client.messages.stream(
+                    model=config.CLAUDE_MODEL,
+                    system=SYSTEM_PROMPT,
+                    messages=messages,
+                    tools=TOOL_SCHEMAS,
+                    max_tokens=4096,
+                ) as stream:
+                    for text in stream.text_stream:
+                        yield {"type": "text", "text": text}
+
+                yield {"type": "done", "sources": _dedup(sources)}
+                return
+            except Exception as e:
+                yield {"type": "error", "message": str(e)}
+                return
+
+        yield {"type": "error", "message": "超出最大工具调用轮次"}
+
     # ── 私有辅助方法 ───────────────────────────────────────────────────────────
 
     def _build_messages(self, history: list[dict], user_message: str) -> list[dict]:
