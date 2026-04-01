@@ -1,8 +1,23 @@
+# Core
 anthropic
 flask
-chromadb
+python-dotenv
+numpy
+
+# Document processing
 pdfplumber
 beautifulsoup4
 lxml
+markdownify
+
+# Embedding & retrieval
 sentence-transformers
-python-dotenv
+chromadb
+rank-bm25
+jieba
+
+# Evaluation (optional)
+ragas
+langchain-community
+langchain-openai
+datasets
