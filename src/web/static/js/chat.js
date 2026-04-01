@@ -25,7 +25,7 @@ function sendExample(btn) {
   sendMessage();
 }
 
-// ── 发送消息 ───────────────────────────────────────────────────────────────────
+// ── 发送消息（流式版本）─────────────────────────────────────────────────────────
 async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text || sendBtn.disabled) return;
@@ -41,27 +41,74 @@ async function sendMessage() {
   inputEl.style.height = "auto";
   setLoading(true);
 
-  const loadingEl = appendLoading();
+  // 创建助手消息气泡（内容先为空，流式填充）
+  const assistantMsg = appendMessage("assistant", "");
+  const bubble = assistantMsg.querySelector(".bubble");
+  let fullText = "";
 
   try {
-    const res = await fetch("/api/chat", {
+    const res = await fetch("/api/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text, history: history.slice(0, -1) }),
     });
 
-    const data = await res.json();
-    loadingEl.remove();
+    if (!res.ok) {
+      const err = await res.json();
+      bubble.innerHTML = marked.parse("⚠️ 请求出错：" + (err.error || "未知错误"));
+      setLoading(false);
+      return;
+    }
 
-    if (data.error) {
-      appendMessage("assistant", "⚠️ 请求出错：" + data.error);
-    } else {
-      appendMessage("assistant", data.answer, data.sources || []);
-      history.push({ role: "assistant", content: data.answer });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // 解析 SSE 消息（以 "data: " 开头，以 \n\n 结束）
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop(); // 最后一段可能不完整，留在 buffer
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const jsonStr = line.slice(6); // 去掉 "data: "
+
+        try {
+          const event = JSON.parse(jsonStr);
+
+          if (event.type === "text") {
+            fullText += event.text;
+            bubble.innerHTML = marked.parse(fullText);
+            scrollToBottom();
+          } else if (event.type === "done") {
+            // 添加来源标签
+            if (event.sources && event.sources.length > 0) {
+              const sourcesEl = document.createElement("div");
+              sourcesEl.className = "sources";
+              event.sources.forEach((src) => {
+                const tag = document.createElement("span");
+                tag.className = "source-tag";
+                tag.textContent = "📄 " + src;
+                sourcesEl.appendChild(tag);
+              });
+              assistantMsg.appendChild(sourcesEl);
+            }
+            history.push({ role: "assistant", content: fullText });
+          } else if (event.type === "error") {
+            bubble.innerHTML = marked.parse("⚠️ " + event.message);
+          }
+        } catch (e) {
+          // JSON 解析失败，跳过
+        }
+      }
     }
   } catch (err) {
-    loadingEl.remove();
-    appendMessage("assistant", "⚠️ 网络错误，请检查服务是否启动。");
+    bubble.innerHTML = marked.parse("⚠️ 网络错误，请检查服务是否启动。");
   } finally {
     setLoading(false);
   }
@@ -75,7 +122,7 @@ function appendMessage(role, text, sources = []) {
   const bubble = document.createElement("div");
   bubble.className = "bubble";
   if (role === "assistant") {
-    bubble.innerHTML = marked.parse(text);
+    bubble.innerHTML = text ? marked.parse(text) : "";
   } else {
     bubble.textContent = text;
   }
@@ -92,20 +139,6 @@ function appendMessage(role, text, sources = []) {
     });
     msg.appendChild(sourcesEl);
   }
-
-  messagesEl.appendChild(msg);
-  scrollToBottom();
-  return msg;
-}
-
-function appendLoading() {
-  const msg = document.createElement("div");
-  msg.className = "message assistant";
-
-  const bubble = document.createElement("div");
-  bubble.className = "bubble loading-bubble";
-  bubble.innerHTML = "<span></span><span></span><span></span>";
-  msg.appendChild(bubble);
 
   messagesEl.appendChild(msg);
   scrollToBottom();

@@ -115,6 +115,57 @@ class TestChatRoute:
         mock_agent.chat.assert_called_once_with("贷款政策", history=[])
 
 
+# ── POST /api/chat/stream（SSE）─────────────────────────────────────────────────
+
+class TestStreamRoute:
+    def test_stream_returns_sse(self, client):
+        c, mock_agent = client
+        mock_agent.chat_stream.return_value = iter([
+            {"type": "text", "text": "你好"},
+            {"type": "text", "text": "，世界"},
+            {"type": "done", "sources": ["a.txt"]},
+        ])
+
+        res = c.post("/api/chat/stream", json={"message": "你好"})
+        assert res.status_code == 200
+        assert "text/event-stream" in res.content_type
+
+        # 解析 SSE 数据
+        data = res.data.decode("utf-8")
+        events = [line.removeprefix("data: ") for line in data.strip().split("\n\n") if line.startswith("data: ")]
+
+        import json
+        parsed = [json.loads(e) for e in events]
+        assert parsed[0] == {"type": "text", "text": "你好"}
+        assert parsed[1] == {"type": "text", "text": "，世界"}
+        assert parsed[2]["type"] == "done"
+        assert parsed[2]["sources"] == ["a.txt"]
+
+    def test_stream_empty_message_returns_400(self, client):
+        c, _ = client
+        res = c.post("/api/chat/stream", json={"message": ""})
+        assert res.status_code == 400
+
+    def test_stream_error_event(self, client):
+        c, mock_agent = client
+        mock_agent.chat_stream.return_value = iter([
+            {"type": "error", "message": "测试错误"},
+        ])
+
+        res = c.post("/api/chat/stream", json={"message": "问题"})
+        data = res.data.decode("utf-8")
+        assert "error" in data
+        assert "测试错误" in data
+
+    def test_stream_exception_returns_error_event(self, client):
+        c, mock_agent = client
+        mock_agent.chat_stream.side_effect = RuntimeError("爆了")
+
+        res = c.post("/api/chat/stream", json={"message": "问题"})
+        data = res.data.decode("utf-8")
+        assert "error" in data
+
+
 # ── 集成测试 ───────────────────────────────────────────────────────────────────
 
 @pytest.mark.integration
