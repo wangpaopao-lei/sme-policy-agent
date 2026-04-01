@@ -56,7 +56,8 @@
 - [x] 3.3 流式输出（Flask SSE + agent.chat_stream + 前端 EventSource，4个测试）
 - [x] 3.4 Agent 策略优化（Tool filters 参数 + Prompt few-shot + 置信度引导）
 
-### Phase 4：评估体系完善 + 整体调优
-- [ ] 4.1 RAGAS 完整指标 + LLM-as-Judge 补充
-- [ ] 4.2 数据驱动调优（chunk大小、RRF k值、Reranker阈值）
-- [ ] 4.3 评估数据集扩充（100+条）
+### Phase 4：模块整合 + 评估调优
+- [x] 4.1 v2 摄入脚本（pipeline_v2 → 父子分块 → 双索引入库，4个测试）
+- [x] 4.2 模块整合（hybrid search + conversation 接入 agent/web，44个现有测试通过）
+- [x] 4.3 评估数据集扩充（50→105条，覆盖8类 x 16篇文档）
+- [x] 4.4 参数调优框架（CLI sweep 实验 + 对比报告，5个测试）
