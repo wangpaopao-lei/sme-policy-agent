@@ -10,6 +10,8 @@
 [![Tests](https://img.shields.io/badge/Tests-217_passed-brightgreen?logo=pytest&logoColor=white)](#测试)
 [![Recall@7](https://img.shields.io/badge/Recall@7-0.97-blue)](#评估结果)
 
+中文 | **[English](./docs/README_EN.md)**
+
 </div>
 
 ---
