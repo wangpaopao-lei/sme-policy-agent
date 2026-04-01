@@ -9,6 +9,7 @@ TOOL_SCHEMAS = [
             "根据用户问题语义检索最相关的政策片段。"
             "当需要了解某类政策内容、政策要求或政策细节时使用。"
             "可以多次调用，使用不同关键词从不同角度检索。"
+            "支持按发布日期、发文机关、政策类别过滤。"
         ),
         "input_schema": {
             "type": "object",
@@ -21,6 +22,29 @@ TOOL_SCHEMAS = [
                     "type": "integer",
                     "description": "返回的结果数量，默认 5，最多 10",
                     "default": 5,
+                },
+                "filters": {
+                    "type": "object",
+                    "description": "可选的元数据过滤条件，缩小检索范围",
+                    "properties": {
+                        "date_from": {
+                            "type": "string",
+                            "description": "发布日期起始，格式 YYYY-MM-DD，如用户说'今年'则填写当年1月1日",
+                        },
+                        "date_to": {
+                            "type": "string",
+                            "description": "发布日期截止，格式 YYYY-MM-DD",
+                        },
+                        "issuing_authority": {
+                            "type": "string",
+                            "description": "发文机关名称，如'财政部'、'工信部'",
+                        },
+                        "category": {
+                            "type": "string",
+                            "description": "政策类别",
+                            "enum": ["融资支持", "税收优惠", "人才政策", "产业扶持", "科技创新"],
+                        },
+                    },
                 },
             },
             "required": ["query"],
@@ -48,7 +72,7 @@ TOOL_SCHEMAS = [
 
 # ── 工具执行逻辑 ───────────────────────────────────────────────────────────────
 
-def execute_search_policy(query: str, top_k: int, embedder, store) -> str:
+def execute_search_policy(query: str, top_k: int, embedder, store, filters: dict = None) -> str:
     """执行语义检索，返回格式化的结果字符串供 Claude 阅读"""
     top_k = min(max(1, top_k), 10)
     query_vec = embedder.embed(query)
@@ -90,6 +114,7 @@ def execute_tool(name: str, tool_input: dict, embedder, store) -> str:
             top_k=tool_input.get("top_k", 5),
             embedder=embedder,
             store=store,
+            filters=tool_input.get("filters"),
         )
     elif name == "get_policy_detail":
         return execute_get_policy_detail(
