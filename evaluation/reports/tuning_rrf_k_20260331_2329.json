@@ -1,0 +1,48 @@
+{
+  "param_name": "rrf_k",
+  "timestamp": "20260331_2329",
+  "results": [
+    {
+      "value": 20,
+      "recall_at_k": 0.96,
+      "mrr": 0.9303333333333333,
+      "time_sec": 6.55,
+      "failures": 4
+    },
+    {
+      "value": 40,
+      "recall_at_k": 0.96,
+      "mrr": 0.9303333333333333,
+      "time_sec": 5.04,
+      "failures": 4
+    },
+    {
+      "value": 60,
+      "recall_at_k": 0.96,
+      "mrr": 0.9303333333333333,
+      "time_sec": 5.22,
+      "failures": 4
+    },
+    {
+      "value": 80,
+      "recall_at_k": 0.96,
+      "mrr": 0.9303333333333333,
+      "time_sec": 5.04,
+      "failures": 4
+    },
+    {
+      "value": 100,
+      "recall_at_k": 0.96,
+      "mrr": 0.9303333333333333,
+      "time_sec": 5.06,
+      "failures": 4
+    }
+  ],
+  "best": {
+    "value": 20,
+    "recall_at_k": 0.96,
+    "mrr": 0.9303333333333333,
+    "time_sec": 6.55,
+    "failures": 4
+  }
+}

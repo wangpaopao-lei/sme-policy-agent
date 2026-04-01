@@ -1,0 +1,27 @@
+{
+  "param_name": "use_rerank",
+  "timestamp": "20260331_2332",
+  "results": [
+    {
+      "value": true,
+      "recall_at_k": 0.96,
+      "mrr": 0.9303333333333333,
+      "time_sec": 6.43,
+      "failures": 4
+    },
+    {
+      "value": false,
+      "recall_at_k": 0.96,
+      "mrr": 0.9303333333333333,
+      "time_sec": 5.19,
+      "failures": 4
+    }
+  ],
+  "best": {
+    "value": true,
+    "recall_at_k": 0.96,
+    "mrr": 0.9303333333333333,
+    "time_sec": 6.43,
+    "failures": 4
+  }
+}

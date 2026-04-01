@@ -1,0 +1,41 @@
+{
+  "param_name": "top_k",
+  "timestamp": "20260331_2330",
+  "results": [
+    {
+      "value": 3,
+      "recall_at_k": 0.94,
+      "mrr": 0.925,
+      "time_sec": 6.46,
+      "failures": 6
+    },
+    {
+      "value": 5,
+      "recall_at_k": 0.96,
+      "mrr": 0.9303333333333333,
+      "time_sec": 5.05,
+      "failures": 4
+    },
+    {
+      "value": 7,
+      "recall_at_k": 0.97,
+      "mrr": 0.932,
+      "time_sec": 5.01,
+      "failures": 3
+    },
+    {
+      "value": 10,
+      "recall_at_k": 0.98,
+      "mrr": 0.934,
+      "time_sec": 5.02,
+      "failures": 2
+    }
+  ],
+  "best": {
+    "value": 10,
+    "recall_at_k": 0.98,
+    "mrr": 0.934,
+    "time_sec": 5.02,
+    "failures": 2
+  }
+}
