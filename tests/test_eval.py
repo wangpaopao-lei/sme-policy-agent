@@ -174,7 +174,7 @@ class TestEvalDataset:
         with open("evaluation/dataset/eval_set.json", "r") as f:
             data = json.load(f)
 
-        assert len(data) == 50
+        assert len(data) >= 100
 
         required_fields = ["id", "question", "expected_answer", "expected_sources", "category"]
         for item in data:

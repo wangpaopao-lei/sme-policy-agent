@@ -328,12 +328,77 @@ v1 pipeline（纯向量检索，400 字固定分块）：
 
 ---
 
-## 7. 待整合事项（Phase 4）
+## 7. 模块整合（Phase 4 完成）
 
-以下组件已独立开发完成，但尚未串联到主流程：
+### 7.1 v2 摄入脚本（scripts/ingest_v2.py）
 
-1. **新 pipeline 替代旧 pipeline**：pipeline_v2 输出的 parsed Markdown + 新 chunker 的父子 chunk 需要接入 ingestion 流程，替代旧的 loader + chunker + pipeline
-2. **hybrid_searcher 接入 Agent**：当前 Agent 仍使用 v1 的 store.query()，需要切换到 HybridSearcher
-3. **conversation 模块接入 Web**：history、rewriter、cache 需要接入 app.py 的请求处理流程
-4. **filters 实际生效**：tools.py 中的 filters 参数需要传递到 hybrid_searcher
-5. **对比评估**：用新 pipeline 重新 ingest 后，跑评估对比基准线
+完整 5 步流程：
+```
+步骤 1: 文档解析（pipeline_v2: parse → metadata → table Q&K）
+步骤 2: 父子分块（create_parent_child_chunks）
+步骤 3: 子 chunk Embedding（BGE-M3 批量）
+步骤 4: 写入 ChromaDB（父 chunk 无 embedding，子 chunk 有 embedding）
+步骤 5: 构建 BM25 索引（子 chunk + 表格加权关键词注入）
+```
+
+CLI 参数：`--no-llm`（跳过 LLM）、`--clean`（清空重建）。
+
+collection 命名：v2 使用 `sme_policies_v2`，和 v1 的 `sme_policies` 共存。
+
+### 7.2 Agent 整合
+
+PolicyAgent 构造函数新增可选参数：
+- `searcher`：HybridSearcher（v2 模式）
+- `history_manager`：ConversationHistory
+- `query_rewriter`：QueryRewriter
+- `cache`：SemanticCache
+
+完整 v2 对话流程：
+```
+用户提问 → 缓存检查 → 命中则直接返回
+         → 未命中 → query 改写 → 对话历史管理
+         → tool_use 循环（search_policy 使用 HybridSearcher）
+         → 回答生成 → 写入缓存 + 更新历史
+```
+
+向后兼容：不传 v2 组件时，自动 fallback 到 v1 的 PolicyStore。
+
+### 7.3 Tools 整合
+
+`execute_search_policy` 优先使用 `searcher`（HybridSearcher），fallback 到 `store`（PolicyStore）。v2 chunk 格式的 metadata 提取（source 在 metadata 中，score 取 rrf_score/rerank_score）。
+
+`execute_tool` 新增 `searcher` 参数透传。
+
+### 7.4 Web 整合
+
+会话管理：内存 dict 存储 `session_id → ConversationHistory`。
+
+新增 `/api/session/clear` 端点。
+
+### 7.5 参数调优框架（evaluation/tuning.py）
+
+CLI 扫描实验：
+```bash
+python evaluation/tuning.py --param rrf_k --values 20,40,60,80,100
+python evaluation/tuning.py --param top_k --values 3,5,7,10
+python evaluation/tuning.py --param use_rerank --values true,false
+```
+
+每组参数运行完整检索评估，输出对比表格（Recall@K、MRR、耗时、失败数），自动标记最优值，保存 JSON 报告。
+
+### 7.6 评估数据集
+
+从 50 条扩充到 105 条：
+
+| 类别 | 数量 |
+|------|------|
+| 简单事实 | 52 |
+| 模糊口语 | 9 |
+| 多条件 | 8 |
+| 跨文档 | 8 |
+| 否定问题 | 8 |
+| 时间相关 | 7 |
+| 无答案 | 7 |
+| 精确引用 | 6 |
+
+所有 16 篇文档每篇至少 3 个问题，5 个政策类别均有覆盖。
