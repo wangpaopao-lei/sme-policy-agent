@@ -11,50 +11,89 @@ MAX_TOOL_ROUNDS = 5  # 防止无限循环
 
 
 class PolicyAgent:
-    def __init__(self, client=None, embedder=None, store=None):
+    def __init__(
+        self,
+        client=None,
+        embedder=None,
+        store=None,
+        searcher=None,
+        history_manager=None,
+        query_rewriter=None,
+        cache=None,
+    ):
         """
         支持依赖注入，方便测试时传入 mock 对象。
-        不传参数时自动初始化真实依赖（懒加载，避免测试时的无关 import 开销）。
+
+        v2 模式：传入 searcher（HybridSearcher）+ conversation 组件
+        v1 模式：传入 store（PolicyStore），保持向后兼容
         """
         if client is not None:
             self.client = client
         else:
             import anthropic
-            import config
             self.client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
         if embedder is not None:
             self.embedder = embedder
         else:
-            import config
             from src.retrieval.embedder import Embedder
             self.embedder = Embedder(model_name=config.EMBEDDING_MODEL)
 
+        # v2: HybridSearcher（优先）
+        self.searcher = searcher
+
+        # v1 兼容：PolicyStore
         if store is not None:
             self.store = store
-        else:
-            import config
+        elif searcher is None:
             from src.retrieval.store import PolicyStore
             self.store = PolicyStore(
                 chroma_path=config.CHROMA_PATH,
                 collection_name=config.CHROMA_COLLECTION,
             )
+        else:
+            self.store = None
+
+        # conversation 组件（可选）
+        self.history_manager = history_manager
+        self.query_rewriter = query_rewriter
+        self.cache = cache
 
     def chat(self, user_message: str, history: list[dict] = None) -> dict:
         """
         处理一轮对话，支持多轮 tool_use 循环。
 
-        参数：
-            user_message: 用户当前输入
-            history: 历史消息列表，格式为 [{"role": "user"|"assistant", "content": str}, ...]
-
-        返回：
-            {
-                "answer": str,         # Claude 的最终回复
-                "sources": list[str]   # 本轮引用的来源文件名（去重）
-            }
+        v2 增强：
+        - 语义缓存命中时直接返回
+        - query 改写（多轮对话指代消解）
+        - 对话历史自动管理
         """
-        messages = self._build_messages(history or [], user_message)
+        # 1. 语义缓存检查
+        if self.cache is not None:
+            cached = self.cache.get(user_message)
+            if cached is not None:
+                answer, sources = cached
+                if self.history_manager is not None:
+                    self.history_manager.add_user(user_message)
+                    self.history_manager.add_assistant(answer)
+                return {"answer": answer, "sources": sources, "cached": True}
+
+        # 2. Query 改写
+        search_query = user_message
+        if self.query_rewriter is not None and self.history_manager is not None:
+            context = self.history_manager.get_recent_context(n_rounds=3)
+            search_query = self.query_rewriter.rewrite(user_message, context)
+
+        # 3. 对话历史
+        if self.history_manager is not None:
+            self.history_manager.add_user(user_message)
+            messages = self._build_messages(
+                self.history_manager.get_messages()[:-1],  # 不含刚加的 user
+                user_message,
+            )
+        else:
+            messages = self._build_messages(history or [], user_message)
+
         sources: list[str] = []
 
         for _ in range(MAX_TOOL_ROUNDS):
@@ -68,13 +107,19 @@ class PolicyAgent:
 
             if response.stop_reason == "end_turn":
                 answer = self._extract_text(response)
-                return {"answer": answer, "sources": _dedup(sources)}
+                deduped_sources = _dedup(sources)
+
+                # 写入缓存和历史
+                if self.cache is not None:
+                    self.cache.set(user_message, answer, deduped_sources)
+                if self.history_manager is not None:
+                    self.history_manager.add_assistant(answer)
+
+                return {"answer": answer, "sources": deduped_sources}
 
             if response.stop_reason == "tool_use":
-                # 把 assistant 的回复（含 tool_use block）加入消息历史
                 messages.append({"role": "assistant", "content": response.content})
 
-                # 执行所有工具，收集结果
                 tool_results = []
                 for block in response.content:
                     if block.type == "tool_use":
@@ -83,24 +128,25 @@ class PolicyAgent:
                             tool_input=block.input,
                             embedder=self.embedder,
                             store=self.store,
+                            searcher=self.searcher,
                         )
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": block.id,
                             "content": result,
                         })
-                        # 收集 search_policy 调用的来源
                         if block.name == "search_policy":
                             sources.extend(_extract_sources(result))
 
                 messages.append({"role": "user", "content": tool_results})
                 continue
 
-            # 其他 stop_reason（max_tokens 等）
             answer = self._extract_text(response)
-            return {"answer": answer, "sources": _dedup(sources)}
+            deduped_sources = _dedup(sources)
+            if self.history_manager is not None:
+                self.history_manager.add_assistant(answer)
+            return {"answer": answer, "sources": deduped_sources}
 
-        # 超出最大工具轮次，返回当前已有内容
         return {
             "answer": "抱歉，处理您的问题时遇到了异常，请重试。",
             "sources": _dedup(sources),
@@ -109,25 +155,38 @@ class PolicyAgent:
     def chat_stream(self, user_message: str, history: list[dict] = None):
         """
         流式版本的 chat。tool_use 阶段静默执行，最后一轮流式输出文本。
-
-        用法：
-            for event in agent.chat_stream("问题"):
-                if event["type"] == "text":
-                    print(event["text"], end="")
-                elif event["type"] == "done":
-                    print(event["sources"])
-
-        yield 事件：
-            {"type": "text", "text": str}    — 文本片段
-            {"type": "done", "sources": list} — 完成，附带来源
-            {"type": "error", "message": str} — 错误
         """
-        messages = self._build_messages(history or [], user_message)
+        # 缓存命中时直接返回（不走流式）
+        if self.cache is not None:
+            cached = self.cache.get(user_message)
+            if cached is not None:
+                answer, sources = cached
+                if self.history_manager is not None:
+                    self.history_manager.add_user(user_message)
+                    self.history_manager.add_assistant(answer)
+                yield {"type": "text", "text": answer}
+                yield {"type": "done", "sources": sources}
+                return
+
+        # Query 改写
+        if self.query_rewriter is not None and self.history_manager is not None:
+            context = self.history_manager.get_recent_context(n_rounds=3)
+            self.query_rewriter.rewrite(user_message, context)
+
+        # 对话历史
+        if self.history_manager is not None:
+            self.history_manager.add_user(user_message)
+            messages = self._build_messages(
+                self.history_manager.get_messages()[:-1],
+                user_message,
+            )
+        else:
+            messages = self._build_messages(history or [], user_message)
+
         sources: list[str] = []
+        full_text = ""
 
         for round_idx in range(MAX_TOOL_ROUNDS):
-            # 前几轮 tool_use 阶段：非流式，静默执行
-            # 最后一轮或 end_turn 时：流式输出
             response = self.client.messages.create(
                 model=config.CLAUDE_MODEL,
                 system=SYSTEM_PROMPT,
@@ -147,6 +206,7 @@ class PolicyAgent:
                             tool_input=block.input,
                             embedder=self.embedder,
                             store=self.store,
+                            searcher=self.searcher,
                         )
                         tool_results.append({
                             "type": "tool_result",
@@ -159,8 +219,6 @@ class PolicyAgent:
                 messages.append({"role": "user", "content": tool_results})
                 continue
 
-            # end_turn 或其他：用流式 API 重新请求最终回答
-            # 将之前积累的 messages 用流式输出
             try:
                 with self.client.messages.stream(
                     model=config.CLAUDE_MODEL,
@@ -170,9 +228,18 @@ class PolicyAgent:
                     max_tokens=4096,
                 ) as stream:
                     for text in stream.text_stream:
+                        full_text += text
                         yield {"type": "text", "text": text}
 
-                yield {"type": "done", "sources": _dedup(sources)}
+                deduped_sources = _dedup(sources)
+
+                # 写入缓存和历史
+                if self.cache is not None:
+                    self.cache.set(user_message, full_text, deduped_sources)
+                if self.history_manager is not None:
+                    self.history_manager.add_assistant(full_text)
+
+                yield {"type": "done", "sources": deduped_sources}
                 return
             except Exception as e:
                 yield {"type": "error", "message": str(e)}

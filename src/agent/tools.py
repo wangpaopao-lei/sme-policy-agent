@@ -72,22 +72,48 @@ TOOL_SCHEMAS = [
 
 # ── 工具执行逻辑 ───────────────────────────────────────────────────────────────
 
-def execute_search_policy(query: str, top_k: int, embedder, store, filters: dict = None) -> str:
-    """执行语义检索，返回格式化的结果字符串供 Claude 阅读"""
+def execute_search_policy(
+    query: str,
+    top_k: int,
+    embedder,
+    store,
+    filters: dict = None,
+    searcher=None,
+) -> str:
+    """
+    执行检索，返回格式化的结果字符串供 Claude 阅读。
+
+    优先使用 searcher（HybridSearcher, v2），fallback 到 store（PolicyStore, v1）。
+    """
     top_k = min(max(1, top_k), 10)
-    query_vec = embedder.embed(query)
-    chunks = store.query(query_vec, top_k=top_k)
+
+    if searcher is not None:
+        # v2: 混合检索
+        chunks = searcher.search(
+            query=query,
+            top_k=top_k,
+            filters=filters,
+        )
+    else:
+        # v1 fallback: 纯向量检索
+        query_vec = embedder.embed(query)
+        chunks = store.query(query_vec, top_k=top_k)
 
     if not chunks:
         return "未找到相关政策内容。"
 
     parts = []
     for i, chunk in enumerate(chunks, 1):
+        meta = chunk.get("metadata", {})
+        source = meta.get("source", chunk.get("source", "未知"))
+        title = meta.get("title", chunk.get("title", ""))
+        score = chunk.get("rrf_score", chunk.get("rerank_score", chunk.get("score", 0)))
+
         parts.append(
             f"[片段 {i}]\n"
-            f"来源文件：{chunk['source']}\n"
-            f"文件标题：{chunk['title']}\n"
-            f"相关度：{chunk['score']}\n"
+            f"来源文件：{source}\n"
+            f"文件标题：{title}\n"
+            f"相关度：{score}\n"
             f"内容：\n{chunk['text']}\n"
         )
     return "\n---\n".join(parts)
@@ -106,7 +132,7 @@ def execute_get_policy_detail(source: str, store) -> str:
     return f"文件名：{source}\n标题：{title}\n\n全文内容：\n{full_text}"
 
 
-def execute_tool(name: str, tool_input: dict, embedder, store) -> str:
+def execute_tool(name: str, tool_input: dict, embedder, store, searcher=None) -> str:
     """统一工具调度入口"""
     if name == "search_policy":
         return execute_search_policy(
@@ -115,6 +141,7 @@ def execute_tool(name: str, tool_input: dict, embedder, store) -> str:
             embedder=embedder,
             store=store,
             filters=tool_input.get("filters"),
+            searcher=searcher,
         )
     elif name == "get_policy_detail":
         return execute_get_policy_detail(

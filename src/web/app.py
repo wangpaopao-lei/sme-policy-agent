@@ -6,18 +6,31 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from flask import Flask, request, jsonify, render_template, Response
 from src.agent.agent import PolicyAgent
+from src.conversation.history import ConversationHistory
+from src.conversation.query_rewriter import QueryRewriter
 
 app = Flask(__name__)
 
 # 单例：Agent 初始化较重（加载 embedding 模型），只初始化一次
 _agent = None
 
+# 会话管理：session_id → ConversationHistory
+# 生产环境应用 Redis，这里简化用内存 dict
+_sessions: dict[str, ConversationHistory] = {}
+
 
 def get_agent() -> PolicyAgent:
     global _agent
     if _agent is None:
+        # 默认 v1 模式（兼容），v2 模式需要传入 searcher 等组件
         _agent = PolicyAgent()
     return _agent
+
+
+def get_session(session_id: str) -> ConversationHistory:
+    if session_id not in _sessions:
+        _sessions[session_id] = ConversationHistory(max_rounds=10)
+    return _sessions[session_id]
 
 
 @app.route("/")
@@ -72,6 +85,16 @@ def chat_stream():
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.route("/api/session/clear", methods=["POST"])
+def clear_session():
+    """清空会话历史"""
+    data = request.get_json(silent=True)
+    session_id = (data or {}).get("session_id", "default")
+    if session_id in _sessions:
+        _sessions[session_id].clear()
+    return jsonify({"status": "ok"})
 
 
 if __name__ == "__main__":
